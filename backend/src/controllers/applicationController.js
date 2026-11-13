@@ -1,12 +1,11 @@
-
 import mongoose from "mongoose";
 import { randomUUID, createHash } from "node:crypto";
 import asyncHandler from "express-async-handler";
 
 import Application from "../models/Application.js";
 import AuditLog from "../models/AuditLog.js";
+import workflowService from "../services/workflowService.js";
 
-// CREATE APPLICATION
 export const createApplication = asyncHandler(async (req, res) => {
     const idempotencyKey = req.get("Idempotency-Key");
 
@@ -37,7 +36,6 @@ export const createApplication = asyncHandler(async (req, res) => {
         .update(JSON.stringify(requestData))
         .digest("hex");
 
-    // Check duplicate request
     const existing = await Application.findOne({ idempotencyKey });
 
     if (existing) {
@@ -51,7 +49,7 @@ export const createApplication = asyncHandler(async (req, res) => {
         return res.status(200).json({
             success: true,
             duplicate: true,
-            message: "Application already exists",
+            message: "Application already exists (idempotent replay)",
             data: existing
         });
     }
@@ -73,7 +71,7 @@ export const createApplication = asyncHandler(async (req, res) => {
                 requestHash,
                 stateHistory: [{
                     status: "PENDING",
-                    reason: "Application submitted"
+                    reason: "Application submitted and received"
                 }]
             }], { session });
 
@@ -90,7 +88,6 @@ export const createApplication = asyncHandler(async (req, res) => {
         });
 
     } catch (error) {
-        // Handle simultaneous duplicate requests
         if (error.code === 11000) {
             const duplicate = await Application.findOne({ idempotencyKey });
 
@@ -105,7 +102,7 @@ export const createApplication = asyncHandler(async (req, res) => {
                 return res.status(200).json({
                     success: true,
                     duplicate: true,
-                    message: "Application already exists",
+                    message: "Application already exists (idempotent replay)",
                     data: duplicate
                 });
             }
@@ -117,16 +114,27 @@ export const createApplication = asyncHandler(async (req, res) => {
         await session.endSession();
     }
 
+    const simulateFailure = req.get("x-simulate-bureau-failure") === "true" || req.query.simulateFailure === "true";
+    const failAttempts = parseInt(req.query.failAttempts || req.get("x-fail-attempts") || "0", 10);
+
+    const processResult = await workflowService.processApplication(applicationId, {
+        simulateFailure,
+        failAttempts
+    });
+
     res.status(201).json({
         success: true,
         duplicate: false,
-        message: "Application submitted successfully",
-        data: application
+        message: "Application submitted and evaluated successfully",
+        data: processResult.application,
+        decision: processResult.decision,
+        status: processResult.status,
+        decisionReason: processResult.decisionReason,
+        ruleTrace: processResult.ruleTrace,
+        enrichmentData: processResult.enrichmentData
     });
 });
 
-
-// GET ALL APPLICATIONS
 export const getApplications = asyncHandler(async (req, res) => {
     const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
     const limit = Math.min(100, Math.max(1, Number.parseInt(req.query.limit, 10) || 10));
@@ -152,8 +160,6 @@ export const getApplications = asyncHandler(async (req, res) => {
     });
 });
 
-
-// GET APPLICATION BY ID
 export const getApplicationById = asyncHandler(async (req, res) => {
     const application = await Application.findOne({
         applicationId: req.params.applicationId
@@ -172,8 +178,6 @@ export const getApplicationById = asyncHandler(async (req, res) => {
     });
 });
 
-
-// GET AUDIT HISTORY
 export const getApplicationAudit = asyncHandler(async (req, res) => {
     const application = await Application.findOne({
         applicationId: req.params.applicationId
@@ -196,3 +200,43 @@ export const getApplicationAudit = asyncHandler(async (req, res) => {
     });
 });
 
+export const reviewApplication = asyncHandler(async (req, res) => {
+    const { applicationId } = req.params;
+    const { decision, reviewer, notes } = req.body;
+
+    if (!decision) {
+        return res.status(400).json({
+            success: false,
+            message: "Decision ('APPROVED' or 'REJECTED') is required"
+        });
+    }
+
+    const updated = await workflowService.reviewApplication(applicationId, {
+        decision,
+        reviewer: reviewer || "underwriter_agent",
+        notes: notes || "Manual underwriter review determination"
+    });
+
+    res.status(200).json({
+        success: true,
+        message: `Application ${applicationId} manual review completed`,
+        data: updated
+    });
+});
+
+export const retryApplication = asyncHandler(async (req, res) => {
+    const { applicationId } = req.params;
+    const simulateFailure = req.get("x-simulate-bureau-failure") === "true" || req.query.simulateFailure === "true";
+    const failAttempts = parseInt(req.query.failAttempts || req.get("x-fail-attempts") || "0", 10);
+
+    const result = await workflowService.processApplication(applicationId, {
+        simulateFailure,
+        failAttempts
+    });
+
+    res.status(200).json({
+        success: result.success,
+        message: result.success ? "Application retried and processed successfully" : "Application retry failed",
+        data: result.application
+    });
+});

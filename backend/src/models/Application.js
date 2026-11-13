@@ -50,8 +50,20 @@ const applicationSchema = new mongoose.Schema({
     },
     decision: {
         type: String,
-        enum: ["APPROVE", "REJECT", "MANUAL_REVIEW", null],
+        enum: ["APPROVE", "REJECT", "MANUAL_REVIEW", "APPROVED", "REJECTED", null],
         default: null
+    },
+    decisionReason: {
+        type: String,
+        default: null
+    },
+    enrichmentData: {
+        type: mongoose.Schema.Types.Mixed,
+        default: null
+    },
+    ruleTrace: {
+        type: [mongoose.Schema.Types.Mixed],
+        default: []
     },
     workflowVersion: {
         type: Number,
@@ -67,8 +79,24 @@ const applicationSchema = new mongoose.Schema({
         required: true
     },
     stateHistory: [{
-        status: String,
-        reason: String,
+        fromStatus: {
+            type: String,
+            default: null
+        },
+        toStatus: {
+            type: String
+        },
+        status: {
+            type: String
+        },
+        reason: {
+            type: String,
+            default: ""
+        },
+        performedBy: {
+            type: String,
+            default: "system"
+        },
         changedAt: {
             type: Date,
             default: Date.now

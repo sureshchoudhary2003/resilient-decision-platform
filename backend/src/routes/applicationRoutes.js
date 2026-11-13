@@ -8,7 +8,9 @@ import {
     createApplication,
     getApplications,
     getApplicationById,
-    getApplicationAudit
+    getApplicationAudit,
+    reviewApplication,
+    retryApplication
 } from "../controllers/applicationController.js";
 
 const router = express.Router();
@@ -51,6 +53,10 @@ router.post(
 router.get("/", getApplications);
 
 router.get("/:applicationId/audit", getApplicationAudit);
+
+router.post("/:applicationId/review", reviewApplication);
+
+router.post("/:applicationId/retry", retryApplication);
 
 router.get("/:applicationId", getApplicationById);
 

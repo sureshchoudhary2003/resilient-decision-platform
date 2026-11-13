@@ -1,0 +1,146 @@
+{
+  "description": "Decision Explanation Examples showing intake input, rules triggered, decision output, and audit reasoning",
+  "examples": [
+    {
+      "scenario": "Scenario 1: Happy Path Prime Applicant Auto-Approval",
+      "input": {
+        "applicantName": "Aman Verma",
+        "email": "aman.verma@example.com",
+        "income": 120000,
+        "creditScore": 780,
+        "loanAmount": 250000
+      },
+      "externalEnrichment": {
+        "bureauReferenceId": "BUR-dcfe9186",
+        "verifiedCreditScore": 785,
+        "fraudRiskScore": 12,
+        "activeDefaults": 0,
+        "kycVerified": true
+      },
+      "rulesTriggered": [
+        {
+          "ruleName": "Minimum Income Threshold",
+          "category": "MANDATORY",
+          "condition": "income >= 20000",
+          "actualValue": 120000,
+          "passed": true,
+          "outcome": "CONTINUE"
+        },
+        {
+          "ruleName": "Auto-Approve Credit Score Tier",
+          "category": "THRESHOLD",
+          "condition": "creditScore >= 720",
+          "actualValue": 780,
+          "passed": true,
+          "outcome": "CONTINUE"
+        },
+        {
+          "ruleName": "Loan-To-Income Safety Ratio",
+          "category": "BRANCHING",
+          "condition": "loanToIncomeRatio <= 5.0",
+          "actualValue": 2.08,
+          "passed": true,
+          "outcome": "CONTINUE"
+        },
+        {
+          "ruleName": "Zero Active Defaults Check",
+          "category": "MANDATORY",
+          "condition": "activeDefaults == 0",
+          "actualValue": 0,
+          "passed": true,
+          "outcome": "CONTINUE"
+        }
+      ],
+      "output": {
+        "status": "APPROVED",
+        "decision": "APPROVED",
+        "decisionReason": "All mandatory eligibility criteria and risk threshold checks passed successfully."
+      },
+      "auditReasoning": "Applicant satisfies all prime underwriting rules with low debt-to-income ratio (2.08x) and zero delinquent credit bureau records."
+    },
+    {
+      "scenario": "Scenario 2: Borderline Credit Score Requiring Manual Underwriter Review",
+      "input": {
+        "applicantName": "Sunil Mehra",
+        "email": "sunil.mehra@example.com",
+        "income": 65000,
+        "creditScore": 660,
+        "loanAmount": 180000
+      },
+      "externalEnrichment": {
+        "bureauReferenceId": "BUR-51e01bde",
+        "verifiedCreditScore": 658,
+        "fraudRiskScore": 18,
+        "activeDefaults": 0
+      },
+      "rulesTriggered": [
+        {
+          "ruleName": "Auto-Approve Credit Score Tier",
+          "category": "THRESHOLD",
+          "condition": "creditScore >= 720",
+          "actualValue": 660,
+          "passed": false,
+          "outcome": "MANUAL_REVIEW",
+          "reason": "Credit score between 600 and 719 requires manual underwriter review"
+        }
+      ],
+      "output": {
+        "status": "MANUAL_REVIEW",
+        "decision": "MANUAL_REVIEW",
+        "decisionReason": "Application flagged for manual review: Credit score between 600 and 719 requires manual underwriter review"
+      },
+      "auditReasoning": "Credit score 660 meets baseline floor (>= 600) but falls below prime auto-approval ceiling (720). Paused for secondary underwriter verification."
+    },
+    {
+      "scenario": "Scenario 3: Mandatory Minimum Income Violation Rejection",
+      "input": {
+        "applicantName": "Ramesh Kumar",
+        "email": "ramesh@example.com",
+        "income": 15000,
+        "creditScore": 720,
+        "loanAmount": 50000
+      },
+      "rulesTriggered": [
+        {
+          "ruleName": "Minimum Income Threshold",
+          "category": "MANDATORY",
+          "condition": "income >= 20000",
+          "actualValue": 15000,
+          "passed": false,
+          "outcome": "REJECT",
+          "reason": "Minimum income requirement of 20,000 not met"
+        }
+      ],
+      "output": {
+        "status": "REJECTED",
+        "decision": "REJECTED",
+        "decisionReason": "Application rejected due to 1 failed check(s): Minimum income requirement of 20,000 not met"
+      },
+      "auditReasoning": "Hard rejection triggered during mandatory stage evaluation prior to credit disbursement."
+    },
+    {
+      "scenario": "Scenario 4: External Dependency Outage & Recovery Flow",
+      "input": {
+        "applicantName": "Test Failover",
+        "email": "failover@example.com",
+        "income": 95000,
+        "creditScore": 740,
+        "loanAmount": 150000
+      },
+      "outagePhase": {
+        "status": "FAILED",
+        "error": "External dependency failure: Credit Bureau Service 503: External Dependency Unavailable (Simulated Failure)",
+        "retriesAttempted": 2,
+        "auditEvent": "EXTERNAL_DEPENDENCY_FAILED"
+      },
+      "recoveryPhase": {
+        "retryTriggered": "POST /api/applications/:id/retry",
+        "status": "APPROVED",
+        "decision": "APPROVED",
+        "auditEvent": "DECISION_FINALIZED"
+      },
+      "auditReasoning": "System isolated third-party 503 error, transitioned state to FAILED without crashing, and successfully finalized evaluation when retried."
+    }
+  ]
+}
+
