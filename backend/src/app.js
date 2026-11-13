@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 
 import healthRoutes from "./routes/healthRoutes.js";
-
+import applicationRoutes from "./routes/applicationRoutes.js";
 import {
     notFound,
     errorHandler
@@ -26,6 +26,7 @@ app.use(
 
 // Health API
 app.use("/api/health", healthRoutes);
+app.use("/api/applications", applicationRoutes);
 
 // 404 handler
 app.use(notFound);
